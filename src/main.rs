@@ -3,10 +3,11 @@ use std::time::Duration;
 use std::sync::mpsc;
 use std::io::{stdin};
 use rand::prelude::*;
+use colored::{Colorize, ColoredString};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 enum Cell {
-    Alive,
+    Alive(u8),
     Dead
 }
 
@@ -78,7 +79,7 @@ fn generate_board(ratio: f32) -> Board {
     let mut new_board = vec!();
     for _ in 0..WIDTH * WIDTH {
         if rng.gen::<f32>() > ratio {
-            new_board.push(Cell::Alive);
+            new_board.push(Cell::Alive(0));
         } else {
             new_board.push(Cell::Dead);
         }
@@ -108,10 +109,20 @@ fn draw_board(state: &Board){
     println!();
 }
 
-fn get_cell_display(cell: &Cell) -> char {
+fn get_cell_display(cell: &Cell) -> ColoredString {
     match cell {
-        Cell::Alive => 'o',
-        Cell::Dead => ' '
+        Cell::Alive(n) => {
+            if *n > 4 {
+                "o".blue()
+            } else if *n > 3 {
+                "o".green()
+            } else if *n > 2 {
+                "o".yellow()
+            } else {
+                "o".white()
+            }
+        },
+        Cell::Dead => " ".white()
     }
 }
 
@@ -130,16 +141,16 @@ fn get_updated_board(state: &Board) -> Board {
 
 fn get_new_cell_state(cell: &Cell, neighbour_count: usize) -> Cell {
     match cell {
-        Cell::Alive => {
+        Cell::Alive(n) => {
             if neighbour_count > 1 && neighbour_count < 4 {
-                Cell::Alive
+                Cell::Alive(n + 1)
             } else { 
                 Cell:: Dead 
             }
         },
         Cell::Dead => {
             if neighbour_count == 3 {
-                Cell::Alive
+                Cell::Alive(0)
             } else {
                 Cell::Dead
             }
@@ -150,8 +161,11 @@ fn get_new_cell_state(cell: &Cell, neighbour_count: usize) -> Cell {
 fn count_neighbours(neighbours: Neighbours) -> usize {
     let mut count = 0;
     for cell in neighbours {
-        if cell == Cell::Alive{
-            count += 1;
+        match cell {
+            Cell::Alive(_) => {
+                count += 1;
+            },
+            _ => ()
         }
     }
     count
@@ -254,26 +268,26 @@ mod tests {
 
     fn get_board() -> Board {
         [
-            Alive, Dead, Alive, Alive, Dead, Alive, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
-            Alive, Dead, Alive, Alive, Dead, Alive, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
-            Dead, Dead, Dead, Alive, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
+            Alive(0), Dead, Alive(0), Alive(0), Dead, Alive(0), Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
+            Alive(0), Dead, Alive(0), Alive(0), Dead, Alive(0), Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
+            Dead, Dead, Dead, Alive(0), Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
             Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
             Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
             Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
             Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
-            Dead, Dead, Dead, Dead, Dead, Alive, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
-            Dead, Dead, Dead, Dead, Dead, Alive, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
-            Dead, Dead, Dead, Dead, Dead, Alive, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
-            Alive, Dead, Alive, Alive, Dead, Alive, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
-            Alive, Dead, Alive, Alive, Dead, Alive, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
-            Dead, Dead, Dead, Alive, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
+            Dead, Dead, Dead, Dead, Dead, Alive(0), Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
+            Dead, Dead, Dead, Dead, Dead, Alive(0), Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
+            Dead, Dead, Dead, Dead, Dead, Alive(0), Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
+            Alive(0), Dead, Alive(0), Alive(0), Dead, Alive(0), Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
+            Alive(0), Dead, Alive(0), Alive(0), Dead, Alive(0), Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
+            Dead, Dead, Dead, Alive(0), Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
             Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
             Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
             Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
             Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
-            Dead, Dead, Dead, Dead, Dead, Alive, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
-            Dead, Dead, Dead, Dead, Dead, Alive, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
-            Dead, Dead, Dead, Dead, Dead, Alive, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead
+            Dead, Dead, Dead, Dead, Dead, Alive(0), Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
+            Dead, Dead, Dead, Dead, Dead, Alive(0), Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
+            Dead, Dead, Dead, Dead, Dead, Alive(0), Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead
         ]
     }
 
@@ -356,7 +370,7 @@ mod tests {
     #[test]
     fn test_neighbour_state_when_alive() {
         let board = get_board();
-        assert_eq!(find_neighbour_state(Some(0), &board), Alive);
+        assert_eq!(find_neighbour_state(Some(0), &board), Alive(0));
     }
 
     #[test]
@@ -368,17 +382,16 @@ mod tests {
     #[test]
     fn test_get_neighbours(){
         let board = get_board();
-        let neighbours = get_neighbours(0, &board);
-        assert_eq!(get_neighbours(0, &board), [Dead, Dead, Dead, Dead, Dead, Dead, Alive, Dead]);
-        assert_eq!(get_neighbours(1, &board), [Dead, Dead, Dead, Alive, Alive, Alive, Dead, Alive]);
+        assert_eq!(get_neighbours(0, &board), [Dead, Dead, Dead, Dead, Dead, Dead, Alive(0), Dead]);
+        assert_eq!(get_neighbours(1, &board), [Dead, Dead, Dead, Alive(0), Alive(0), Alive(0), Dead, Alive(0)]);
     }
 
     #[test]
     fn count_neighbours_returns_alive_count(){
-        let neighbours = [Dead, Dead, Alive, Dead, Dead, Dead, Dead, Dead];
+        let neighbours = [Dead, Dead, Alive(0), Dead, Dead, Dead, Dead, Dead];
         assert_eq!(count_neighbours(neighbours), 1);
 
-        let neighbours = [Alive, Alive, Alive, Alive, Alive, Alive, Alive, Alive];
+        let neighbours = [Alive(0), Alive(0), Alive(0), Alive(0), Alive(0), Alive(0), Alive(0), Alive(0)];
         assert_eq!(count_neighbours(neighbours), 8);
 
         let neighbours = [Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead];
@@ -387,21 +400,27 @@ mod tests {
 
     #[test]
     fn when_alive_should_die_for_less_than_2_neighbours(){
-        assert_eq!(get_new_cell_state(&Cell::Alive, 1), Cell::Dead);
-        assert_eq!(get_new_cell_state(&Cell::Alive, 0), Cell::Dead);
+        assert_eq!(get_new_cell_state(&Cell::Alive(0), 1), Cell::Dead);
+        assert_eq!(get_new_cell_state(&Cell::Alive(0), 0), Cell::Dead);
     }
 
     
     #[test]
     fn when_alive_should_die_for_more_than_3_neighbours(){
-        assert_eq!(get_new_cell_state(&Cell::Alive, 4), Cell::Dead);
-        assert_eq!(get_new_cell_state(&Cell::Alive, 5), Cell::Dead);
+        assert_eq!(get_new_cell_state(&Cell::Alive(0), 4), Cell::Dead);
+        assert_eq!(get_new_cell_state(&Cell::Alive(0), 5), Cell::Dead);
     }
 
     #[test]
     fn when_alive_should_survive_at_2_or_3_neighbours(){
-        assert_eq!(get_new_cell_state(&Cell::Alive, 2), Cell::Alive);
-        assert_eq!(get_new_cell_state(&Cell::Alive, 3), Cell::Alive);
+        assert_eq!(get_new_cell_state(&Cell::Alive(0), 2), Cell::Alive(1));
+        assert_eq!(get_new_cell_state(&Cell::Alive(0), 3), Cell::Alive(1));
+    }
+
+    #[test]
+    fn when_a_cell_survives_its_age_increments(){
+        assert_eq!(get_new_cell_state(&Cell::Alive(0), 2), Cell::Alive(1));
+        assert_eq!(get_new_cell_state(&Cell::Alive(1), 3), Cell::Alive(2));
     }
 
     #[test]
@@ -415,6 +434,6 @@ mod tests {
 
     #[test]
     fn when_dead_should_alive_for_3_neighbours(){
-        assert_eq!(get_new_cell_state(&Cell::Dead, 3), Cell::Alive);
+        assert_eq!(get_new_cell_state(&Cell::Dead, 3), Cell::Alive(0));
     }
 }
