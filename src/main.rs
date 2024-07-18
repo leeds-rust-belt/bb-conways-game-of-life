@@ -15,7 +15,9 @@ enum Command{
     Pause,
     Redraw,
     HigherRatio,
-    LowerRatio
+    LowerRatio,
+    Faster,
+    Slower
 }
 
 
@@ -32,15 +34,18 @@ fn main() {
         let mut frame = 0;
         let mut ratio = 0.7;
         let mut board = generate_board(ratio);
-
+        let mut sleep = 700;
 
         loop {
             if active {
                 frame += 1;
                 print!("\x1B[2J\x1B[1;1H");
-                println!("frame: {} - ratio: {}", frame, ratio);
+                println!("frame: {} - ratio: {} - sleep duration(ms): {}", frame, ratio, sleep);
                 draw_board(&board);
-                println!("r - redraw, m - increase ratio, l - lower ratio, q - quit");
+                println!("commands:");
+                println!("r - redraw, m - increase ratio, l - lower ratio");
+                println!("z - slower, x - faster, p - pause, q - quit");
+                println!("you have to press enter for commands to work!");
                 board = get_updated_board(&board);
             }
 
@@ -50,9 +55,11 @@ fn main() {
                 Ok(Command::Redraw) => { board = generate_board(ratio); }
                 Ok(Command::HigherRatio) => { ratio += 0.05; }
                 Ok(Command::LowerRatio) => { ratio -= 0.05; }
+                Ok(Command::Faster) => { sleep -= 50; }
+                Ok(Command::Slower) => { sleep += 50; }
                 _ => ()
             }
-            thread::sleep(Duration::from_millis(700));
+            thread::sleep(Duration::from_millis(sleep));
         }
     });
 
@@ -66,6 +73,8 @@ fn main() {
                     "r" => { let _ = msg_sender.send(Command::Redraw);},
                     "m" => { let _ = msg_sender.send(Command::HigherRatio); },
                     "l" => { let _ = msg_sender.send(Command::LowerRatio); },
+                    "z" => { let _ = msg_sender.send(Command::Slower); },
+                    "x" => { let _ = msg_sender.send(Command::Faster); },
                     _ => ()
                 }
             },
