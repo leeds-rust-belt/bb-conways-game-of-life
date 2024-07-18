@@ -1,0 +1,420 @@
+use std::thread;
+use std::time::Duration;
+use std::sync::mpsc;
+use std::io::{stdin};
+use rand::prelude::*;
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+enum Cell {
+    Alive,
+    Dead
+}
+
+enum Command{
+    Pause,
+    Redraw,
+    HigherRatio,
+    LowerRatio
+}
+
+
+const WIDTH: usize = 20;
+type Board = [Cell; WIDTH * WIDTH];
+type Neighbours = [Cell; 8];
+
+
+fn main() {
+
+    let (msg_sender, msg_receiver) = mpsc::channel::<Command>();
+    let _handle = thread::spawn(move || {
+        let mut active = true;
+        let mut frame = 0;
+        let mut ratio = 0.7;
+        let mut board = generate_board(ratio);
+
+
+        loop {
+            if active {
+                frame += 1;
+                print!("\x1B[2J\x1B[1;1H");
+                println!("frame: {} - ratio: {}", frame, ratio);
+                draw_board(&board);
+                println!("r - redraw, m - increase ratio, l - lower ratio, q - quit");
+                board = get_updated_board(&board);
+            }
+
+            let msg = msg_receiver.try_recv();
+            match msg {
+                Ok(Command::Pause) => { active = !active },
+                Ok(Command::Redraw) => { board = generate_board(ratio); }
+                Ok(Command::HigherRatio) => { ratio += 0.05; }
+                Ok(Command::LowerRatio) => { ratio -= 0.05; }
+                _ => ()
+            }
+            thread::sleep(Duration::from_millis(700));
+        }
+    });
+
+    loop {
+        let mut input = String::new();
+        match stdin().read_line(&mut input) {
+            Ok(_) => {
+                match input.as_str().trim() {
+                    "q" => break,
+                    "p" => { let _ = msg_sender.send(Command::Pause); },
+                    "r" => { let _ = msg_sender.send(Command::Redraw);},
+                    "m" => { let _ = msg_sender.send(Command::HigherRatio); },
+                    "l" => { let _ = msg_sender.send(Command::LowerRatio); },
+                    _ => ()
+                }
+            },
+            Err(error) => println!("error: {error}")
+        }
+    }
+}
+
+fn generate_board(ratio: f32) -> Board {
+    let mut rng = rand::thread_rng();
+    let mut new_board = vec!();
+    for _ in 0..WIDTH * WIDTH {
+        if rng.gen::<f32>() > ratio {
+            new_board.push(Cell::Alive);
+        } else {
+            new_board.push(Cell::Dead);
+        }
+    }
+
+    new_board.try_into().expect("unable to create board array")
+
+}
+
+fn draw_board(state: &Board){
+    print!(" ");
+    for _ in 0..WIDTH {
+        print!("--");
+    }
+    println!();
+    for i in 0..WIDTH {
+        print!("|");
+        for j in 0..WIDTH {
+            print!("{} ", get_cell_display(&state[(i * WIDTH) + j]));
+        }
+        println!("|");
+    }
+    print!(" ");
+    for _ in 0..WIDTH {
+        print!("--");
+    }
+    println!();
+}
+
+fn get_cell_display(cell: &Cell) -> char {
+    match cell {
+        Cell::Alive => 'o',
+        Cell::Dead => ' '
+    }
+}
+
+fn get_updated_board(state: &Board) -> Board {
+    let mut new_state = vec!();
+    for i in 0..state.len() {
+        let cell = state[i];
+        let neighbours = get_neighbours(i, state);
+        let count = count_neighbours(neighbours);
+        let new_cell = get_new_cell_state(&cell, count);
+        new_state.push(new_cell);
+    }
+
+    new_state.try_into().expect("unable to create board array")
+}
+
+fn get_new_cell_state(cell: &Cell, neighbour_count: usize) -> Cell {
+    match cell {
+        Cell::Alive => {
+            if neighbour_count > 1 && neighbour_count < 4 {
+                Cell::Alive
+            } else { 
+                Cell:: Dead 
+            }
+        },
+        Cell::Dead => {
+            if neighbour_count == 3 {
+                Cell::Alive
+            } else {
+                Cell::Dead
+            }
+        }
+    }
+}
+
+fn count_neighbours(neighbours: Neighbours) -> usize {
+    let mut count = 0;
+    for cell in neighbours {
+        if cell == Cell::Alive{
+            count += 1;
+        }
+    }
+    count
+}
+
+fn get_neighbours(cell: usize, state: &Board) -> Neighbours {
+    let neighbours = [
+        get_nw(cell),
+        get_n(cell),
+        get_ne(cell),
+        get_e(cell),
+        get_w(cell),
+        get_sw(cell),
+        get_s(cell),
+        get_se(cell)
+    ];
+
+    neighbours.iter().map(|address|{
+        find_neighbour_state(*address, state)
+    }).collect::<Vec<Cell>>().try_into().expect("unable to create array")
+}
+
+fn find_neighbour_state(address: Option<usize>, state: &Board) -> Cell {
+    match address {
+        Some(n) => state[n],
+        None => Cell::Dead
+    }
+}
+
+fn get_nw(cell:usize) -> Option<usize> {
+    if cell % WIDTH == 0 || cell < WIDTH {
+        None
+    } else {
+        Some(cell - (WIDTH + 1))
+    }
+}
+
+fn get_n(cell:usize) -> Option<usize> {
+    if cell < WIDTH {
+        None
+    } else {
+        Some(cell - WIDTH)
+    }
+}
+
+fn get_ne(cell: usize) -> Option<usize> {
+    if cell < WIDTH || cell % WIDTH == WIDTH - 1 {
+        None
+    } else {
+        Some(cell - (WIDTH -1 ))
+    }
+}
+
+fn get_w(cell:usize) -> Option<usize> {
+    if cell % WIDTH == 0 {
+        None
+    } else {
+        Some(cell - 1)
+    }
+}
+
+fn get_e(cell:usize) -> Option<usize> {
+    if cell % WIDTH == (WIDTH - 1) {
+        None
+    } else {
+        Some(cell + 1)
+    }
+}
+
+fn get_sw(cell:usize) -> Option<usize> {
+    if cell % WIDTH == 0 || cell >= WIDTH * (WIDTH - 1)  {
+        None
+    } else {
+        Some(cell + (WIDTH - 1))
+    }
+}
+
+fn get_s(cell:usize) -> Option<usize> {
+    if cell >= WIDTH * (WIDTH - 1)  {
+        None
+    } else {
+        Some(cell + WIDTH)
+    }
+}
+
+fn get_se(cell:usize) -> Option<usize> {
+    if cell % WIDTH == WIDTH - 1 || cell >= WIDTH * (WIDTH - 1)  {
+        None
+    } else {
+        Some(cell + WIDTH + 1)
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+    use Cell::*;
+
+    fn get_board() -> Board {
+        [
+            Alive, Dead, Alive, Alive, Dead, Alive, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
+            Alive, Dead, Alive, Alive, Dead, Alive, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
+            Dead, Dead, Dead, Alive, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
+            Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
+            Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
+            Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
+            Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
+            Dead, Dead, Dead, Dead, Dead, Alive, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
+            Dead, Dead, Dead, Dead, Dead, Alive, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
+            Dead, Dead, Dead, Dead, Dead, Alive, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
+            Alive, Dead, Alive, Alive, Dead, Alive, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
+            Alive, Dead, Alive, Alive, Dead, Alive, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
+            Dead, Dead, Dead, Alive, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
+            Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
+            Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
+            Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
+            Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
+            Dead, Dead, Dead, Dead, Dead, Alive, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
+            Dead, Dead, Dead, Dead, Dead, Alive, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead,
+            Dead, Dead, Dead, Dead, Dead, Alive, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead
+        ]
+    }
+
+    #[test]
+    fn test_nw(){
+        assert_eq!(get_nw(0), None);
+        assert_eq!(get_nw(1), None);
+        assert_eq!(get_nw(WIDTH + 1), Some(0));
+        assert_eq!(get_nw(WIDTH + 2), Some(1));
+        assert_eq!(get_nw(WIDTH * 2 + 1), Some(WIDTH));
+    }
+
+    #[test]
+    fn test_n(){
+        assert_eq!(get_n(0), None);
+        assert_eq!(get_n(1), None);
+        assert_eq!(get_n(WIDTH), Some(0));
+    }
+
+    #[test]
+    fn test_ne(){
+        assert_eq!(get_ne(0), None);
+        assert_eq!(get_ne(1), None);
+        assert_eq!(get_ne(WIDTH), Some(1));
+        assert_eq!(get_ne(2 * WIDTH - 1), None);
+    }
+
+    #[test]
+    fn test_w(){
+        assert_eq!(get_w(0), None);
+        assert_eq!(get_w(1), Some(0));
+        assert_eq!(get_w(WIDTH), None);
+        assert_eq!(get_w(WIDTH - 1), Some(WIDTH - 2));
+    }
+
+    #[test]
+    fn test_e(){
+        assert_eq!(get_e(0), Some(1));
+        assert_eq!(get_e(1), Some(2));
+        assert_eq!(get_e(WIDTH - 1), None);
+        assert_eq!(get_e(WIDTH), Some(WIDTH + 1));
+        assert_eq!(get_e(WIDTH * WIDTH - 1), None);
+    }
+
+    #[test]
+    fn test_sw(){
+        assert_eq!(get_sw(0), None);
+        assert_eq!(get_sw(1), Some(WIDTH));
+        assert_eq!(get_sw(WIDTH + 1), Some(2 * WIDTH));
+        assert_eq!(get_sw(WIDTH + 2), Some(2 * WIDTH + 1));
+        assert_eq!(get_sw(WIDTH * (WIDTH - 1) + 1), None);
+        
+    }
+
+    #[test]
+    fn test_s(){
+        assert_eq!(get_s(0), Some(WIDTH));
+        assert_eq!(get_s(1), Some(WIDTH + 1));
+        assert_eq!(get_s(WIDTH * (WIDTH - 1) + 1), None);
+        assert_eq!(get_s(WIDTH * (WIDTH - 1)), None)
+        
+    }
+
+    
+    #[test]
+    fn test_se(){
+        assert_eq!(get_se(0), Some(WIDTH + 1));
+        assert_eq!(get_se(1), Some(WIDTH + 2));
+        assert_eq!(get_se(WIDTH * (WIDTH - 1) + 1), None);
+        assert_eq!(get_se((WIDTH * WIDTH) - 1), None);
+        
+    }
+
+    #[test]
+    fn test_neighbour_state_when_none() {
+        let board = get_board();
+        assert_eq!(find_neighbour_state(None, &board), Dead);
+    }
+
+    #[test]
+    fn test_neighbour_state_when_alive() {
+        let board = get_board();
+        assert_eq!(find_neighbour_state(Some(0), &board), Alive);
+    }
+
+    #[test]
+    fn test_neighbour_state_when_dead() {
+        let board = get_board();
+        assert_eq!(find_neighbour_state(Some(1), &board), Dead);
+    }
+
+    #[test]
+    fn test_get_neighbours(){
+        let board = get_board();
+        let neighbours = get_neighbours(0, &board);
+        assert_eq!(get_neighbours(0, &board), [Dead, Dead, Dead, Dead, Dead, Dead, Alive, Dead]);
+        assert_eq!(get_neighbours(1, &board), [Dead, Dead, Dead, Alive, Alive, Alive, Dead, Alive]);
+    }
+
+    #[test]
+    fn count_neighbours_returns_alive_count(){
+        let neighbours = [Dead, Dead, Alive, Dead, Dead, Dead, Dead, Dead];
+        assert_eq!(count_neighbours(neighbours), 1);
+
+        let neighbours = [Alive, Alive, Alive, Alive, Alive, Alive, Alive, Alive];
+        assert_eq!(count_neighbours(neighbours), 8);
+
+        let neighbours = [Dead, Dead, Dead, Dead, Dead, Dead, Dead, Dead];
+        assert_eq!(count_neighbours(neighbours), 0);
+    }
+
+    #[test]
+    fn when_alive_should_die_for_less_than_2_neighbours(){
+        assert_eq!(get_new_cell_state(&Cell::Alive, 1), Cell::Dead);
+        assert_eq!(get_new_cell_state(&Cell::Alive, 0), Cell::Dead);
+    }
+
+    
+    #[test]
+    fn when_alive_should_die_for_more_than_3_neighbours(){
+        assert_eq!(get_new_cell_state(&Cell::Alive, 4), Cell::Dead);
+        assert_eq!(get_new_cell_state(&Cell::Alive, 5), Cell::Dead);
+    }
+
+    #[test]
+    fn when_alive_should_survive_at_2_or_3_neighbours(){
+        assert_eq!(get_new_cell_state(&Cell::Alive, 2), Cell::Alive);
+        assert_eq!(get_new_cell_state(&Cell::Alive, 3), Cell::Alive);
+    }
+
+    #[test]
+    fn when_dead_should_remain_dead_when_not_3_neighbours(){
+        assert_eq!(get_new_cell_state(&Cell::Dead, 0), Cell::Dead);
+        assert_eq!(get_new_cell_state(&Cell::Dead, 1), Cell::Dead);
+        assert_eq!(get_new_cell_state(&Cell::Dead, 2), Cell::Dead);
+        assert_eq!(get_new_cell_state(&Cell::Dead, 4), Cell::Dead);
+        assert_eq!(get_new_cell_state(&Cell::Dead, 5), Cell::Dead);
+    }
+
+    #[test]
+    fn when_dead_should_alive_for_3_neighbours(){
+        assert_eq!(get_new_cell_state(&Cell::Dead, 3), Cell::Alive);
+    }
+}
